@@ -1,0 +1,32 @@
+Fixed Dataset Splits Summary
+Seed: 0
+Processed datasets: ['bitcoinalpha', 'bitcoinotc', 'epinions', 'wiki-RfA']
+
+bitcoinalpha:
+  train_edges: 11782
+  val_edges: 3628
+  test_edges: 3618
+  tr_test_edges: 367
+  nn_test_edges: 3251
+
+bitcoinotc:
+  train_edges: 18989
+  val_edges: 5339
+  test_edges: 5339
+  tr_test_edges: 1009
+  nn_test_edges: 4330
+
+epinions:
+  train_edges: 434388
+  val_edges: 126150
+  test_edges: 126140
+  tr_test_edges: 17786
+  nn_test_edges: 108354
+
+wiki-RfA:
+  train_edges: 95108
+  val_edges: 25575
+  test_edges: 25575
+  tr_test_edges: 968
+  nn_test_edges: 24607
+

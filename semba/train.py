@@ -20,6 +20,9 @@ from parser import parse_args
 from utils import *
 from model_wrapper import STGNN
 
+# 导入统一的数据加载器
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from fixed_split_loader import load_semba_fixed_split
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -209,20 +212,32 @@ if __name__ == '__main__':
 
     # Try to load a pre-saved split first
     split_loaded = False
-    saved_split_path = os.environ.get('SPLIT_PKL', None)
-    if saved_split_path and osp.exists(saved_split_path):
-        split = pkl.load(open(saved_split_path, 'rb'))
-        data, train_data, val_data, test_data = split['all'], split['train'], split['val'], split['test']
+    
+    # 首先尝试加载统一的固定划分
+    try:
+        data, train_data, val_data, test_data = load_semba_fixed_split(args.dataset, args.device)
         split_loaded = True
-        print(f"[INFO] Loaded saved split from {saved_split_path}")
-    elif hasattr(args, 'split_id'):
-        candidate = osp.join('./splits', args.dataset, f'split_{args.split_id}.pkl')
-        if osp.exists(candidate):
-            split = pkl.load(open(candidate, 'rb'))
+        print(f"[INFO] Loaded unified fixed split for dataset: {args.dataset}")
+    except FileNotFoundError:
+        print(f"[INFO] No unified fixed split found for {args.dataset}, trying other methods...")
+    
+    # 如果没有统一划分，尝试其他预保存的划分
+    if not split_loaded:
+        saved_split_path = os.environ.get('SPLIT_PKL', None)
+        if saved_split_path and osp.exists(saved_split_path):
+            split = pkl.load(open(saved_split_path, 'rb'))
             data, train_data, val_data, test_data = split['all'], split['train'], split['val'], split['test']
             split_loaded = True
-            print(f"[INFO] Loaded saved split from {candidate}")
+            print(f"[INFO] Loaded saved split from {saved_split_path}")
+        elif hasattr(args, 'split_id'):
+            candidate = osp.join('./splits', args.dataset, f'split_{args.split_id}.pkl')
+            if osp.exists(candidate):
+                split = pkl.load(open(candidate, 'rb'))
+                data, train_data, val_data, test_data = split['all'], split['train'], split['val'], split['test']
+                split_loaded = True
+                print(f"[INFO] Loaded saved split from {candidate}")
 
+    # 最后的备选方案：使用原始get_data方法
     if not split_loaded:
         data, train_data, val_data, test_data = get_data(
             args.dataset, dataset_path, args.device, val_ratio=args.val_ratio, test_ratio=args.test_ratio

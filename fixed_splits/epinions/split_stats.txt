@@ -1,0 +1,12 @@
+Dataset: epinions
+Seed: 0
+Total edges: 841372
+Total nodes: 131828
+Train edges: 434388
+Val edges: 126150
+Test edges: 126140
+Transductive test edges: 17786
+Inductive test edges: 108354
+Masked nodes: 13182
+Train nodes: 83379
+New nodes: 48449

@@ -1,0 +1,12 @@
+Dataset: wiki-RfA
+Seed: 0
+Total edges: 170499
+Total nodes: 10595
+Train edges: 95108
+Val edges: 25575
+Test edges: 25575
+Transductive test edges: 968
+Inductive test edges: 24607
+Masked nodes: 1059
+Train nodes: 7208
+New nodes: 3387

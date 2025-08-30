@@ -1,0 +1,15 @@
+2025-08-30 21:42:25,941 - root - INFO - Create log file at log/bitcoinalpha/2025-8-30-21-42-25-bitcoinalpha.log
+2025-08-30 21:42:25,941 - root - INFO - Command line executed: python main.py --data=bitcoinalpha --bs=64 --lr=0.001 --n_degree=64 --n_layer=3 --train_time_encoding=learn --edge_embedding=concat --neigh_agg=rnn --path_agg=mean --bias=1e-6 --seed=0 --walk_type=before --direct=add --co_occ=learn_add --gpu=0 --n_epoch 1
+2025-08-30 21:42:25,941 - root - INFO - Full args parsed:
+2025-08-30 21:42:25,941 - root - INFO - Namespace(bias=1e-06, bs=64, co_occ='learn_add', data='bitcoinalpha', direct='add', early_stop=5, edge_embedding='concat', gpu=0, lr=0.001, n_degree=64, n_epoch=1, n_layer=3, neigh_agg='rnn', path_agg='mean', pos_dim=64, pos_sample='binary', seed=0, task='link_sign', time_dim=64, tolerance=0, train_time_encoding='learn', walk_type='before')
+2025-08-30 21:42:25,941 - root - INFO - Create checkpoint directory ./saved_checkpoints/2025-8-30-21-42-25-bitcoinalpha/
+2025-08-30 21:42:25,941 - root - INFO - Create best model directory ./best_models/2025-8-30-21-42-25-bitcoinalpha/
+2025-08-30 21:42:25,944 - root - INFO - Using fixed split for dataset: bitcoinalpha
+2025-08-30 21:42:25,944 - root - INFO - count sample num --
+2025-08-30 21:42:25,944 - root - INFO - Train set: 11782, Val set: 3628, Teste set: 3618, Trasn set: 367, Induc set: 3251
+2025-08-30 21:42:25,944 - root - INFO - -------------------
+2025-08-30 21:42:26,064 - module - INFO - neighbors: 64, relativeID dim: 64, time dim: 64, feature dim: 3
+2025-08-30 21:42:26,064 - module - INFO - Using time encoding
+2025-08-30 21:42:26,138 - root - INFO - num of training instances: 11782
+2025-08-30 21:42:26,138 - root - INFO - num of batches per epoch: 185
+2025-08-30 21:42:26,138 - root - INFO - start 0 epoch
