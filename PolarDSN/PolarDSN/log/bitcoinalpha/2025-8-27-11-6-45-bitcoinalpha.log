@@ -1,0 +1,26 @@
+2025-08-27 11:06:45,814 - root - INFO - Create log file at log/bitcoinalpha/2025-8-27-11-6-45-bitcoinalpha.log
+2025-08-27 11:06:45,814 - root - INFO - Command line executed: python main.py --data=bitcoinalpha --bs=64 --lr=0.001 --n_degree=64 --n_layer=3 --train_time_encoding=learn --edge_embedding=concat --neigh_agg=rnn --path_agg=mean --bias=1e-6 --seed=0 --walk_type=before --direct=add --co_occ=learn_add --gpu=0
+2025-08-27 11:06:45,814 - root - INFO - Full args parsed:
+2025-08-27 11:06:45,814 - root - INFO - Namespace(bias=1e-06, bs=64, co_occ='learn_add', data='bitcoinalpha', direct='add', early_stop=5, edge_embedding='concat', gpu=0, lr=0.001, n_degree=64, n_epoch=100, n_layer=3, neigh_agg='rnn', path_agg='mean', pos_dim=64, pos_sample='binary', seed=0, task='link_sign', time_dim=64, tolerance=0, train_time_encoding='learn', walk_type='before')
+2025-08-27 11:06:45,814 - root - INFO - Create directory ./saved_checkpoints/
+2025-08-27 11:06:45,814 - root - INFO - Create directory
+2025-08-27 11:06:45,814 - root - INFO - Create checkpoint directory ./saved_checkpoints/2025-8-27-11-6-45-bitcoinalpha/
+2025-08-27 11:06:45,814 - root - INFO - Create best model directory ./best_models/2025-8-27-11-6-45-bitcoinalpha/
+2025-08-27 11:06:45,839 - root - INFO - count sample num --
+2025-08-27 11:06:45,839 - root - INFO - Train set: 11782, Val set: 3628, Teste set: 3618, Trasn set: 367, Induc set: 3251
+2025-08-27 11:06:45,839 - root - INFO - -------------------
+2025-08-27 11:06:45,959 - module - INFO - neighbors: 64, relativeID dim: 64, time dim: 64, feature dim: 3
+2025-08-27 11:06:45,959 - module - INFO - Using time encoding
+2025-08-27 11:06:46,032 - root - INFO - num of training instances: 11782
+2025-08-27 11:06:46,032 - root - INFO - num of batches per epoch: 185
+2025-08-27 11:06:46,032 - root - INFO - start 0 epoch
+2025-08-27 11:09:49,842 - root - INFO - epoch: 0:
+2025-08-27 11:09:49,842 - root - INFO - epoch mean loss: 2.645558822477186
+2025-08-27 11:09:49,842 - root - INFO - train precision: 0.6321250185033852, val precision: 0.5297785210068814
+2025-08-27 11:09:49,842 - root - INFO - train accuracy: 0.6297466216216216, val accuracy: 0.6104216507177034
+2025-08-27 11:09:49,842 - root - INFO - train recall: 0.5286641236334294, val recall: 0.5123411251936684
+2025-08-27 11:09:49,843 - root - INFO - train weighted_f1: 0.6143533999759602, val weighted_f1: 0.5882285010011002
+2025-08-27 11:09:49,843 - root - INFO - train micro_f1: 0.6297466216216216, val micro_f1: 0.6104216507177034
+2025-08-27 11:09:49,843 - root - INFO - train macro_f1: 0.4920939932391726, val macro_f1: 0.4613539195428899
+2025-08-27 11:09:50,026 - matplotlib.pyplot - DEBUG - Loaded backend agg version v2.2.
+2025-08-27 11:09:56,172 - root - INFO - start 1 epoch

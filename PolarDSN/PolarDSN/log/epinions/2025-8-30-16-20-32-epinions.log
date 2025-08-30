@@ -1,0 +1,6 @@
+2025-08-30 16:20:32,721 - root - INFO - Create log file at log/epinions/2025-8-30-16-20-32-epinions.log
+2025-08-30 16:20:32,721 - root - INFO - Command line executed: python main.py --data=epinions --bs=64 --lr=0.001 --n_degree=32 --n_layer=2 --train_time_encoding=learn --edge_embedding=concat --neigh_agg=rnn --path_agg=mean --bias=1e-7 --seed=0 --walk_type=before --direct=add --co_occ=learn_add --gpu=0
+2025-08-30 16:20:32,721 - root - INFO - Full args parsed:
+2025-08-30 16:20:32,721 - root - INFO - Namespace(bias=1e-07, bs=64, co_occ='learn_add', data='epinions', direct='add', early_stop=5, edge_embedding='concat', gpu=0, lr=0.001, n_degree=32, n_epoch=100, n_layer=2, neigh_agg='rnn', path_agg='mean', pos_dim=64, pos_sample='binary', seed=0, task='link_sign', time_dim=64, tolerance=0, train_time_encoding='learn', walk_type='before')
+2025-08-30 16:20:32,721 - root - INFO - Create checkpoint directory ./saved_checkpoints/2025-8-30-16-20-32-epinions/
+2025-08-30 16:20:32,721 - root - INFO - Create best model directory ./best_models/2025-8-30-16-20-32-epinions/
