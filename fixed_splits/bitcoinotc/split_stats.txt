@@ -2,11 +2,8 @@ Dataset: bitcoinotc
 Seed: 0
 Total edges: 35592
 Total nodes: 5881
-Train edges: 18989
+Train edges: 24914
 Val edges: 5339
 Test edges: 5339
-Transductive test edges: 1009
-Inductive test edges: 4330
-Masked nodes: 588
-Train nodes: 3984
-New nodes: 1897
+Val time threshold: 1374233059.238753
+Test time threshold: 1388289751.381174

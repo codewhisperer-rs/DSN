@@ -1,5 +1,4 @@
 import torch
-import os
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.metrics import roc_auc_score, f1_score, confusion_matrix
 import pandas as pd
@@ -206,43 +205,129 @@ def split_test_set_results(inference_data, probabilities, pred, true, new_node_m
     print(f'Results for two new nodes - ROC_AUC: {roc_two:.4f}, F1: {fpr1_two:.4f}, FPR: {f1_two:.4f}')
     print()
     
-def get_data(NAME, path, device, val_ratio=0.15, test_ratio=0.15):
-    """Unified data loader for Semba.
-
-    Supports original Semba datasets and PolarDSN CSV files located at
-    ../PolarDSN/DynamicData/weight/ml_<name>.csv.
-    
-    For PolarDSN CSVs, call with NAME in {'bitcoinalpha','bitcoinotc','wiki-RfA','epinions'}.
+def get_data(NAME, path=None, device='cpu', val_ratio=0.15, test_ratio=0.15, use_fixed_split=True):
     """
-
-    # 1) Support PolarDSN fixed CSVs without additional mapping
-    polardsn_names = {"bitcoinalpha", "bitcoinotc", "wiki-RfA", "epinions"}
-    if NAME in polardsn_names:
-        # Resolve CSV root in priority: env -> ../SharedData -> ../PolarDSN/DynamicData/weight
-        env_dir = os.environ.get("POLARDSN_CSV_DIR")
-        if env_dir:
-            csv_root = env_dir
-        else:
-            here = os.path.abspath(os.path.dirname(__file__))
-            shared = os.path.abspath(os.path.join(here, '..', 'SharedData'))
-            polardsn_default = os.path.abspath(os.path.join(here, '..', 'PolarDSN', 'DynamicData', 'weight'))
-            csv_root = shared if os.path.isdir(shared) else polardsn_default
-        data = load_polardsn_csv(csv_root, NAME).to(device)
+    统一的数据加载函数，支持固定划分
+    
+    Args:
+        NAME: 数据集名称 ('bitcoinalpha', 'bitcoinotc', 'epinions', 'wiki-RfA', 或原始格式)
+        path: 数据路径（仅用于原始数据集，可选）
+        device: 设备 ('cpu' 或 'cuda')
+        val_ratio: 验证集比例（仅用于随机划分）
+        test_ratio: 测试集比例（仅用于随机划分）
+        use_fixed_split: 是否使用固定划分（推荐为True）
+        
+    Returns:
+        (data, train_data, val_data, test_data): 完整数据和三个划分后的数据集
+    """
+    
+    # 支持的固定划分数据集
+    fixed_split_names = {'bitcoinalpha', 'bitcoinotc', 'epinions', 'wiki-RfA'}
+    
+    # 数据集名称映射（兼容原有格式）
+    name_mapping = {
+        'BitcoinOTC-1': 'bitcoinotc',
+        'BitcoinAlpha-1': 'bitcoinalpha', 
+        'wikirfa': 'wiki-RfA'
+    }
+    
+    # 标准化数据集名称
+    dataset_name = name_mapping.get(NAME, NAME)
+    
+    if use_fixed_split and dataset_name in fixed_split_names:
+        # 使用固定划分
+        try:
+            import sys
+            import os
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            parent_dir = os.path.dirname(current_dir)
+            sys.path.append(parent_dir)
+            
+            from fixed_split_loader import load_fixed_split_for_semba
+            
+            print(f"使用固定划分加载 {dataset_name}")
+            # 修正路径，指向父目录的fixed_splits
+            fixed_splits_path = os.path.join(parent_dir, "fixed_splits")
+            data, split_indices = load_fixed_split_for_semba(dataset_name, device, fixed_splits_path)
+            
+            # 根据索引创建子数据集
+            train_indices = split_indices['train']
+            val_indices = split_indices['val']
+            test_indices = split_indices['test']
+            
+            # 如果data是TemporalData对象
+            if hasattr(data, 'src'):
+                # 将numpy数组转换为torch tensor用于索引
+                import torch
+                train_indices = torch.tensor(train_indices, dtype=torch.long)
+                val_indices = torch.tensor(val_indices, dtype=torch.long)
+                test_indices = torch.tensor(test_indices, dtype=torch.long)
+                
+                train_data = data[train_indices]
+                val_data = data[val_indices]
+                test_data = data[test_indices]
+            else:
+                # 如果data是字典（numpy版本），创建简单的数据对象
+                import torch
+                
+                def create_data_obj(indices):
+                    return type('TemporalData', (), {
+                        'src': torch.tensor(data['src'][indices], dtype=torch.long).to(device),
+                        'dst': torch.tensor(data['dst'][indices], dtype=torch.long).to(device),
+                        't': torch.tensor(data['t'][indices], dtype=torch.long).to(device),
+                        'msg': torch.tensor(data['msg'][indices], dtype=torch.float32).to(device),
+                        'y': torch.tensor(data['y'][indices], dtype=torch.long).to(device),
+                        'num_events': len(indices)
+                    })()
+                
+                train_data = create_data_obj(train_indices)
+                val_data = create_data_obj(val_indices)
+                test_data = create_data_obj(test_indices)
+                
+                # 为完整数据也创建对象
+                all_indices = list(range(len(data['src'])))
+                data = create_data_obj(all_indices)
+            
+            print(f"固定划分加载成功 - 训练: {len(train_indices)}, 验证: {len(val_indices)}, 测试: {len(test_indices)}")
+            return data, train_data, val_data, test_data
+            
+        except ImportError as e:
+            print(f"固定划分加载器不可用: {e}")
+            print("回退到原有的随机划分方式")
+        except Exception as e:
+            print(f"固定划分加载失败: {e}")
+            print("回退到原有的随机划分方式")
+    
+    # 回退到原有的随机划分方式
+    print(f"使用随机划分加载 {NAME}")
+    
+    # 数据集名称映射到原始格式
+    name_to_original = {
+        'bitcoinalpha': 'BitcoinAlpha-1',
+        'bitcoinotc': 'BitcoinOTC-1',
+        'epinions': 'epinions',
+        'wiki-RfA': 'wikirfa'
+    }
+    
+    # 获取原始格式名称
+    original_name = name_to_original.get(dataset_name, NAME)
+    
+    # 设置默认path如果没有提供
+    if path is None:
+        path = './data'  # 默认数据路径
+    
+    if original_name == 'BitcoinOTC-1' or original_name == 'BitcoinAlpha-1':
+        dataset = tgn_bitcoin(path, edge_window_size=1, name=original_name)
+    elif original_name == 'epinions':
+        dataset = tgn_epinions(path, edge_window_size=1, name=original_name)
+    elif original_name == 'wikirfa':
+        dataset = tgn_wikirfa(path, edge_window_size=1, name=original_name)
     else:
-        # 2) Original Semba datasets
-        if NAME in ('BitcoinOTC-1', 'BitcoinAlpha-1'):
-            dataset = tgn_bitcoin(path, edge_window_size=1, name=NAME)
-        elif NAME == 'epinions':
-            dataset = tgn_epinions(path, edge_window_size=1, name=NAME)
-        elif NAME == 'wikirfa':
-            dataset = tgn_wikirfa(path, edge_window_size=1, name=NAME)
-        else:
-            raise ValueError(f"Unknown dataset NAME: {NAME}")
+        raise ValueError(f"Unsupported dataset: {NAME} (mapped to {original_name})")
 
-        data = dataset[0].to(device)
-
-    # Common split
+    data = dataset[0].to(device)
     train_data, val_data, test_data = data.train_val_test_split(val_ratio=val_ratio, test_ratio=test_ratio)
+    
     return data, train_data, val_data, test_data
     
 

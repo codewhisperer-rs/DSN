@@ -1,5 +1,5 @@
 model=semba
-dataset=wikirfa
+dataset=bitcoinalpha
 task=signlink_class # sign_class, link_class, signlink_class
 num_epoch=10
 lr_init=0.01

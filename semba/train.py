@@ -20,40 +20,8 @@ from parser import parse_args
 from utils import *
 from model_wrapper import STGNN
 
-# 导入统一的数据加载器
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from fixed_split_loader import load_semba_fixed_split
 
 torch.autograd.set_detect_anomaly(True)
-
-# --------------------
-# Split helpers
-# --------------------
-
-def make_trans_ind_splits(train_data, val_data, test_data, num_nodes, device):
-    """Create transductive and inductive splits from (train/val/test).
-
-    Transductive: keep val/test edges whose both endpoints appeared in train.
-    Inductive: keep val/test edges whose both endpoints did NOT appear in train.
-    """
-    # Nodes seen in training
-    train_nodes = torch.stack([train_data.src, train_data.dst]).unique()
-
-    # Transductive masks
-    train_nodes_yes = torch.zeros(num_nodes, dtype=bool, device=device)
-    train_nodes_yes[train_nodes] = True
-    val_idx_trans = train_nodes_yes[val_data.src] & train_nodes_yes[val_data.dst]
-    test_idx_trans = train_nodes_yes[test_data.src] & train_nodes_yes[test_data.dst]
-    val_trans_data, test_trans_data = val_data[val_idx_trans], test_data[test_idx_trans]
-
-    # Inductive masks
-    train_nodes_no = torch.ones(num_nodes, dtype=bool, device=device)
-    train_nodes_no[train_nodes] = False
-    val_idx_ind = train_nodes_no[val_data.src] & train_nodes_no[val_data.dst]
-    test_idx_ind = train_nodes_no[test_data.src] & train_nodes_no[test_data.dst]
-    val_ind_data, test_ind_data = val_data[val_idx_ind], test_data[test_idx_ind]
-
-    return val_trans_data, test_trans_data, val_ind_data, test_ind_data
 
 def train(args):
     model.train()
@@ -209,45 +177,22 @@ if __name__ == '__main__':
     random.seed(args.seed)
 
     dataset_path = osp.join('./data', args.dataset)
-
-    # Try to load a pre-saved split first
-    split_loaded = False
-    
-    # 首先尝试加载统一的固定划分
-    try:
-        data, train_data, val_data, test_data = load_semba_fixed_split(args.dataset, args.device)
-        split_loaded = True
-        print(f"[INFO] Loaded unified fixed split for dataset: {args.dataset}")
-    except FileNotFoundError:
-        print(f"[INFO] No unified fixed split found for {args.dataset}, trying other methods...")
-    
-    # 如果没有统一划分，尝试其他预保存的划分
-    if not split_loaded:
-        saved_split_path = os.environ.get('SPLIT_PKL', None)
-        if saved_split_path and osp.exists(saved_split_path):
-            split = pkl.load(open(saved_split_path, 'rb'))
-            data, train_data, val_data, test_data = split['all'], split['train'], split['val'], split['test']
-            split_loaded = True
-            print(f"[INFO] Loaded saved split from {saved_split_path}")
-        elif hasattr(args, 'split_id'):
-            candidate = osp.join('./splits', args.dataset, f'split_{args.split_id}.pkl')
-            if osp.exists(candidate):
-                split = pkl.load(open(candidate, 'rb'))
-                data, train_data, val_data, test_data = split['all'], split['train'], split['val'], split['test']
-                split_loaded = True
-                print(f"[INFO] Loaded saved split from {candidate}")
-
-    # 最后的备选方案：使用原始get_data方法
-    if not split_loaded:
-        data, train_data, val_data, test_data = get_data(
-            args.dataset, dataset_path, args.device, val_ratio=args.val_ratio, test_ratio=args.test_ratio
-        )
-        print("[INFO] No saved split found; created a fresh split via get_data().")
-
-    # Derive transductive/inductive subsets deterministically from the base split
-    val_trans_data, test_trans_data, val_ind_data, test_ind_data = make_trans_ind_splits(
-        train_data, val_data, test_data, data.num_nodes, args.device
-    )
+    data, train_data, val_data, test_data = get_data(args.dataset, dataset_path, args.device, val_ratio=args.val_ratio, 
+                                                    test_ratio=args.test_ratio)
+    # transductive
+    train_nodes = torch.stack([train_data.src, train_data.dst]).unique()
+    train_nodes_yes = torch.zeros(data.num_nodes, dtype=bool, device=args.device)
+    train_nodes_yes[train_nodes] = True
+    val_idx = train_nodes_yes[val_data.src] & train_nodes_yes[val_data.dst]
+    test_idx = train_nodes_yes[test_data.src] & train_nodes_yes[test_data.dst]
+    val_trans_data, test_trans_data = val_data[val_idx], test_data[test_idx]
+    # inductive
+    train_nodes = torch.stack([train_data.src, train_data.dst]).unique()
+    train_nodes_no = torch.ones(data.num_nodes, dtype=bool, device=args.device)
+    train_nodes_no[train_nodes] = False
+    val_idx = train_nodes_no[val_data.src] & train_nodes_no[val_data.dst]
+    test_idx = train_nodes_no[test_data.src] & train_nodes_no[test_data.dst]
+    val_ind_data, test_ind_data = val_data[val_idx], test_data[test_idx]
     
     
     min_dst_idx, max_dst_idx = int(data.dst.min()), int(data.dst.max())
@@ -267,7 +212,7 @@ if __name__ == '__main__':
     num_feats = args.num_feats
     if args.feat_type == 'one-hot':
         num_feats = data.num_nodes
-        x = torch.eye(data.num_nodes, dtype=torch.float, device=args.device)
+        x = torch.diag(data.num_nodes, dtype=torch.float, device=args.device)
     elif args.feat_type == 'random':
         x = torch.rand(data.num_nodes, num_feats, dtype=torch.float, device=args.device)
     elif args.feat_type == 'zeros':
@@ -300,10 +245,10 @@ if __name__ == '__main__':
         train_loss, train_params = train(args)
         time_epch = time.time() - start
         total_time += time_epch
-        val_loss, val_params = test(args, val_data)
+        val_loss, val_params = test(args, val_data, epoch)
         lr_scheduler(val_loss)
         print(f'E{epoch:002d} Tr [Loss: {train_loss:.4f} {metric_string(train_params)}]')
-        print(f'Val [Loss: {val_loss:.4f} {metric_string(val_params)}]')
+        print(f'Val [Loss: {val_loss:.4f} {metric_string(train_params)}]')
         print(f'Time: {time_epch}')
         print()
     
