@@ -1,8 +1,9 @@
+import os
 import pandas as pd
 from log import *
 from eval import *
 from utils import *
-from utils import get_args, EarlyStopMonitor, RandEdgeSampler, set_random_seed
+from utils import get_args, EarlyStopMonitor, FixedNegSampler, set_random_seed
 from train import *
 from module import POLAR
 from graph import NeighborFinder
@@ -43,96 +44,63 @@ logger, get_checkpoint_path, best_model_path = set_up_logger(args, sys_argv, now
 
 Dynamic_path = os.path.dirname(os.path.dirname(__file__))
 
-g_df = pd.read_csv('../DynamicData/weight/ml_{}.csv'.format(DATA))
+# Always use pre-split CSVs; raise if missing.
+# Resolve splits directory
+if args.splits_dir is None:
+    splits_dir = os.path.join(Dynamic_path, '../DynamicData', 'splits', f'{DATA}_seed{SEED}')
+else:
+    splits_dir = args.splits_dir
 
+# Load split CSVs
+def _load_split(name):
+    p = os.path.join(splits_dir, f'{name}.csv')
+    if not os.path.exists(p):
+        raise FileNotFoundError(f'Missing split file: {p}. Generate via export_splits.py or provide --splits_dir.')
+    return pd.read_csv(p)
+
+train_df = _load_split('train')
+val_df = _load_split('val')
+test_df = _load_split('test')
+trans_df = _load_split('transductive')
+induc_df = _load_split('inductive')
+
+# Full dataset is concat of train/val/test
+g_df = pd.concat([train_df, val_df, test_df], ignore_index=True)
+
+# Assign arrays
+# Full arrays for building adjacency
 src_l = g_df.u.values
 dst_l = g_df.i.values
 e_idx_l = g_df.idx.values
-sign_l = g_df.label.values # sign
+sign_l = g_df.label.values
 ts_l = g_df.ts.values
-weight_l = g_df.weight.values 
+weight_l = g_df.weight.values
+
+# Split arrays
+def _arrs(df):
+    return df.u.values, df.i.values, df.ts.values, df.idx.values, df.label.values, df.weight.values
+
+train_src_l, train_dst_l, train_ts_l, train_e_idx_l, train_label_l, train_weight_l = _arrs(train_df)
+val_src_l, val_dst_l, val_ts_l, val_e_idx_l, val_label_l, val_weight_l = _arrs(val_df)
+test_src_l, test_dst_l, test_ts_l, test_e_idx_l, test_label_l, test_weight_l = _arrs(test_df)
+tr_test_src_l, tr_test_dst_l, tr_test_ts_l, tr_test_e_idx_l, tr_test_label_l, tr_test_weight_l = _arrs(trans_df)
+nn_test_src_l, nn_test_dst_l, nn_test_ts_l, nn_test_e_idx_l, nn_test_label_l, nn_test_weight_l = _arrs(induc_df)
+
 if DIREC == 'add':
     EDGE_FEAT_DIM = np.shape(weight_l.reshape(len(weight_l), 1))[1] + 2
 else:
-    EDGE_FEAT_DIM = np.shape(weight_l.reshape(len(weight_l), 1))[1] 
+    EDGE_FEAT_DIM = np.shape(weight_l.reshape(len(weight_l), 1))[1]
 
 max_idx = max(src_l.max(), dst_l.max())
-
-assert(np.unique(np.stack([src_l, dst_l])).shape[0] == max_idx or ~math.isclose(1, args.data_usage))  
-
-val_time, test_time = list(np.quantile(g_df.ts, [0.70, 0.85]))
-
-total_node_set = set(np.unique(np.hstack([g_df.u.values, g_df.i.values])))
+total_node_set = set(np.unique(np.hstack([src_l, dst_l])))
 num_total_unique_nodes = len(total_node_set)
-diff_ts = set(g_df.ts.values)
-time_list = sorted(list(diff_ts))
-
-mask_node_set = set(random.sample(set(src_l[ts_l > val_time]).union(set(dst_l[ts_l > val_time])), int(0.1 * num_total_unique_nodes)))
-
-
-mask_src_flag = g_df.u.map(lambda x: x in mask_node_set).values 
-mask_dst_flag = g_df.i.map(lambda x: x in mask_node_set).values 
-none_node_flag = (1 - mask_src_flag) * (1 - mask_dst_flag) 
-
-train_flag = (ts_l <= val_time) * (none_node_flag > 0) 
-
-train_src_l = src_l[train_flag]
-train_dst_l = dst_l[train_flag]
-train_ts_l = ts_l[train_flag]
-train_e_idx_l = e_idx_l[train_flag]
-train_label_l = sign_l[train_flag]
-train_weight_l = weight_l[train_flag]
-
-train_node_set = set(train_src_l).union(train_dst_l)
-assert(len(train_node_set - mask_node_set) == len(train_node_set))
-
-new_node_set = total_node_set - train_node_set 
-if new_node_set == mask_node_set: 
-    print("stop")
-
-val_flag = (ts_l <= test_time) * (ts_l > val_time) 
-test_flag = ts_l > test_time 
-
-is_new_node_edge = np.array([(a in new_node_set or b in new_node_set) for a, b in zip(src_l, dst_l)])
-is_seen_node_edge = np.array([(a in train_node_set and b in train_node_set) for a, b in zip(src_l, dst_l)])
- 
-tr_test_flag = test_flag * is_seen_node_edge
-nn_test_flag = test_flag * is_new_node_edge 
-
-val_src_l = src_l[val_flag]
-val_dst_l = dst_l[val_flag]
-val_ts_l = ts_l[val_flag]
-val_e_idx_l = e_idx_l[val_flag]
-val_label_l = sign_l[val_flag]
-val_weight_l = weight_l[val_flag]
-
-test_src_l = src_l[test_flag]
-test_dst_l = dst_l[test_flag]
-test_ts_l = ts_l[test_flag]
-test_e_idx_l = e_idx_l[test_flag]
-test_label_l = sign_l[test_flag]
-test_weight_l = weight_l[test_flag]
-
-tr_test_src_l = src_l[tr_test_flag]
-tr_test_dst_l = dst_l[tr_test_flag]
-tr_test_ts_l = ts_l[tr_test_flag]
-tr_test_e_idx_l = e_idx_l[tr_test_flag]
-tr_test_label_l = sign_l[tr_test_flag]
-tr_test_weight_l = weight_l[tr_test_flag]
-
-nn_test_src_l = src_l[nn_test_flag]
-nn_test_dst_l = dst_l[nn_test_flag]
-nn_test_ts_l = ts_l[nn_test_flag]
-nn_test_e_idx_l = e_idx_l[nn_test_flag]
-nn_test_label_l = sign_l[nn_test_flag]
-nn_test_weight_l = weight_l[nn_test_flag]
 
 train_data = train_src_l, train_dst_l, train_ts_l, train_e_idx_l, train_label_l, train_weight_l
 val_data = val_src_l, val_dst_l, val_ts_l, val_e_idx_l, val_label_l, val_weight_l
 train_val_data = (train_data, val_data)
 
-logger.info('count sample num --')
-logger.info('Train set: {}, Val set: {}, Teste set: {}, Trasn set: {}, Induc set: {}'.format(len(train_src_l), len(val_src_l), len(test_src_l), len(tr_test_src_l), len(nn_test_src_l)))
+logger.info('Using pre-split CSVs from: {}'.format(splits_dir))
+logger.info('Train set: {}, Val set: {}, Test set: {}, Trans set: {}, Induc set: {}'.format(len(train_src_l), len(val_src_l), len(test_src_l), len(tr_test_src_l), len(nn_test_src_l)))
 logger.info('-------------------')
 
 if DIREC == 'non':
@@ -180,11 +148,25 @@ elif DIREC == 'add':
 
 ngh_finders = partial_ngh_finder, full_ngh_finder
 
-train_rand_sampler = RandEdgeSampler((train_src_l, ), (train_dst_l, ), num_total_unique_nodes)
-val_rand_sampler = RandEdgeSampler((train_src_l, val_src_l), (train_dst_l, val_dst_l), num_total_unique_nodes,seed=0)
-test_rand_sampler = RandEdgeSampler((train_src_l, val_src_l, test_src_l), (train_dst_l, val_dst_l, test_dst_l), num_total_unique_nodes, seed=1)
-trans_test_rand_sampler = RandEdgeSampler((train_src_l, val_src_l, test_src_l), (train_dst_l, val_dst_l, test_dst_l), num_total_unique_nodes, seed=2)
-induc_test_rand_sampler = RandEdgeSampler((train_src_l, val_src_l, test_src_l), (train_dst_l, val_dst_l, test_dst_l), num_total_unique_nodes, seed=3)
+# Negative samplers (require fixed CSVs; no dynamic sampling)
+splits_dir = args.splits_dir or os.path.join(Dynamic_path, '../DynamicData', 'splits', f'{DATA}_seed{SEED}')
+
+def _load_fixed_neg(name: str) -> FixedNegSampler:
+    p = os.path.join(splits_dir, f'{name}_neg.csv')
+    if not os.path.exists(p):
+        raise FileNotFoundError(
+            'Missing negative samples CSV: {}. Generate via export_splits.py with --export_neg, '
+            'or provide --splits_dir pointing to prepared files.'.format(p)
+        )
+    df = pd.read_csv(p)
+    logger.info('Using fixed {} negatives from {}'.format(name, p))
+    return FixedNegSampler(df.u.values, df.i.values, seed=SEED)
+
+train_rand_sampler = _load_fixed_neg('train')
+val_rand_sampler = _load_fixed_neg('val')
+test_rand_sampler = _load_fixed_neg('test')
+trans_test_rand_sampler = _load_fixed_neg('transductive')
+induc_test_rand_sampler = _load_fixed_neg('inductive')
 
 rand_samplers = train_rand_sampler, val_rand_sampler
 

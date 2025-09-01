@@ -1,9 +1,0 @@
-Dataset: bitcoinalpha
-Seed: 0
-Total edges: 24186
-Total nodes: 3783
-Train edges: 16940
-Val edges: 3628
-Test edges: 3618
-Val time threshold: 1365048000.0
-Test time threshold: 1385182800.0

@@ -1,9 +1,0 @@
-Dataset: wiki-RfA
-Seed: 0
-Total edges: 170499
-Total nodes: 10595
-Train edges: 119349
-Val edges: 25575
-Test edges: 25575
-Val time threshold: 1228809228.0
-Test time threshold: 1273754856.0

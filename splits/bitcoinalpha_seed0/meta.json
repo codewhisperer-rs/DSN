@@ -1,0 +1,9 @@
+{
+  "seed": 0,
+  "val_quantile": 0.7,
+  "test_quantile": 0.85,
+  "mask_frac": 0.1,
+  "val_time": 1365048000.0,
+  "test_time": 1385182800.0,
+  "num_mask_nodes": 378
+}

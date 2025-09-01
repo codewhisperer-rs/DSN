@@ -43,7 +43,8 @@ def get_args():
     parser.add_argument('--lr', type=float, default=1e-3, help='learning rate')
     parser.add_argument('--tolerance', type=float, default=0, help='tolerated marginal improvement for early stopper')
 
-
+    # data loading options
+    parser.add_argument('--splits_dir', type=str, default=None, help='Directory containing pre-split CSVs; defaults to DynamicData/splits/<data>_seed<seed>')
     try:
         args = parser.parse_args()
     except:
@@ -120,6 +121,54 @@ class RandEdgeSampler(object):
             null_dst_batch.append(v)
           
         return src, np.array(null_dst_batch)
+
+
+class FixedNegSampler(object):
+    """Fixed negative pairs sampler backed by precomputed CSV (u,i).
+    .sample(size) returns (src_neg_batch, dst_neg_batch) of length `size`.
+    If data is exhausted, it wraps around and reshuffles deterministically (if seed given).
+    """
+    def __init__(self, src_list, dst_list, seed=None):
+        self.src_list = np.array(src_list)
+        self.dst_list = np.array(dst_list)
+        assert len(self.src_list) == len(self.dst_list)
+        self.n = len(self.src_list)
+        self.pos = 0
+        self.seed = seed
+        self.random_state = np.random.RandomState(seed) if seed is not None else None
+        # Initial shuffle for randomness but reproducible if seed provided
+        self._maybe_shuffle()
+
+    def _maybe_shuffle(self):
+        if self.random_state is not None:
+            idx = np.arange(self.n)
+            self.random_state.shuffle(idx)
+            self.src_list = self.src_list[idx]
+            self.dst_list = self.dst_list[idx]
+
+    def sample(self, size):
+        if size <= 0:
+            return np.array([], dtype=self.src_list.dtype), np.array([], dtype=self.dst_list.dtype)
+        end = self.pos + size
+        if end <= self.n:
+            s = self.src_list[self.pos:end]
+            d = self.dst_list[self.pos:end]
+            self.pos = end % self.n
+            if self.pos == 0:
+                self._maybe_shuffle()
+            return s, d
+        else:
+            # wrap around
+            first = self.n - self.pos
+            s1 = self.src_list[self.pos:]
+            d1 = self.dst_list[self.pos:]
+            self._maybe_shuffle()
+            self.pos = 0
+            rem = size - first
+            s2 = self.src_list[self.pos:self.pos+rem]
+            d2 = self.dst_list[self.pos:self.pos+rem]
+            self.pos += rem
+            return np.concatenate([s1, s2]), np.concatenate([d1, d2])
 
 
 def set_random_seed(seed):

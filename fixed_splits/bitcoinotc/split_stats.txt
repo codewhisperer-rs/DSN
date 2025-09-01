@@ -1,9 +1,0 @@
-Dataset: bitcoinotc
-Seed: 0
-Total edges: 35592
-Total nodes: 5881
-Train edges: 24914
-Val edges: 5339
-Test edges: 5339
-Val time threshold: 1374233059.238753
-Test time threshold: 1388289751.381174

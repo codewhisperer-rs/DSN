@@ -1,9 +1,0 @@
-Dataset: epinions
-Seed: 0
-Total edges: 841372
-Total nodes: 131828
-Train edges: 589082
-Val edges: 126150
-Test edges: 126140
-Val time threshold: 982018800.0
-Test time threshold: 1003615200.0
