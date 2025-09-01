@@ -9,7 +9,7 @@ import pandas as pd
 
 # Local minimal copies to avoid requiring full project deps
 import random as _py_random
-
+from PolarDSN.PolarDSN.utils import RandEdgeSampler
 
 def set_random_seed(seed):
     try:
@@ -24,49 +24,6 @@ def set_random_seed(seed):
     _py_random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
 
-
-class RandEdgeSampler(object):
-    def __init__(self, src_list, dst_list, num_nodes, seed=None):
-        self.seed = None
-        self.num_node = num_nodes
-        self.src_list = np.concatenate(src_list)
-        self.dst_list = np.concatenate(dst_list)
-        self.src_list_uni = np.unique(self.src_list)
-        self.dst_list_uni = np.unique(self.dst_list)
-        self.edge = list(zip(self.src_list, self.dst_list))
-        try:
-            import torch
-            self.edge_list = torch.stack([torch.Tensor(self.src_list), torch.Tensor(self.dst_list)])
-        except Exception:
-            self.edge_list = None
-
-        if seed is not None:
-            self.seed = seed
-            self.random_state = np.random.RandomState(self.seed)
-
-    def sample(self, size):
-        if self.seed is None:
-            src_index = np.random.randint(0, len(self.src_list_uni), size)
-            dst_index = np.random.randint(0, len(self.dst_list_uni), size)
-        else:
-            src_index = self.random_state.randint(0, len(self.src_list_uni), size)
-            dst_index = self.random_state.randint(0, len(self.dst_list_uni), size)
-        return self.src_list_uni[src_index], self.dst_list_uni[dst_index]
-
-    def sample_semba(self, size):
-        # Strict negative sampling (if torch_geometric is available)
-        try:
-            import torch
-            from torch_geometric.utils import negative_sampling
-            if self.edge_list is None:
-                self.edge_list = torch.stack([torch.Tensor(self.src_list), torch.Tensor(self.dst_list)])
-            null_ei_batch = negative_sampling(self.edge_list, num_nodes=self.num_node, num_neg_samples=size)
-            while ((null_ei_batch == 0).any()) == True:
-                null_ei_batch = negative_sampling(self.edge_list, num_nodes=self.num_node, num_neg_samples=size)
-            return np.array(null_ei_batch[0]), np.array(null_ei_batch[1])
-        except Exception:
-            # Fallback to uniform if torch_geometric unavailable
-            return self.sample(size)
 
 
 def parse_args():
