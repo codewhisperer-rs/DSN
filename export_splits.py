@@ -7,9 +7,9 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 
-# Local minimal copies to avoid requiring full project deps
 import random as _py_random
-from PolarDSN.PolarDSN.utils import RandEdgeSampler
+from utils import RandEdgeSampler
+
 
 def set_random_seed(seed):
     try:
@@ -199,25 +199,40 @@ def export_negatives(g_df: pd.DataFrame, masks: Dict[str, np.ndarray], out_dir: 
         }
 
     # samplers for different phases
-    train_sampler = build_sampler(train_df.u.values, train_df.i.values, seed=None)
-    val_sampler = RandEdgeSampler((train_df.u.values, val_df.u.values), (train_df.i.values, val_df.i.values), num_total_unique_nodes, seed=seeds["val"]) 
-    test_sampler = RandEdgeSampler((train_df.u.values, val_df.u.values, test_df.u.values), (train_df.i.values, val_df.i.values, test_df.i.values), num_total_unique_nodes, seed=seeds["test"]) 
-    trans_sampler = RandEdgeSampler((train_df.u.values, val_df.u.values, test_df.u.values), (train_df.i.values, val_df.i.values, test_df.i.values), num_total_unique_nodes, seed=seeds["transductive"]) 
-    induc_sampler = RandEdgeSampler((train_df.u.values, val_df.u.values, test_df.u.values), (train_df.i.values, val_df.i.values, test_df.i.values), num_total_unique_nodes, seed=seeds["inductive"]) 
+    # For training/validation negatives, restrict candidates to nodes present in the corresponding graphs
+    train_sampler = build_sampler(train_df.u.values, train_df.i.values, seed=seeds.get("train", None))
+    val_sampler = RandEdgeSampler(
+        (train_df.u.values, val_df.u.values), (train_df.i.values, val_df.i.values), num_total_unique_nodes, seed=seeds["val"])
+    # For test/hybrid splits we can sample from the whole graph
+    test_sampler = RandEdgeSampler(
+        (train_df.u.values, val_df.u.values, test_df.u.values),
+        (train_df.i.values, val_df.i.values, test_df.i.values), num_total_unique_nodes, seed=seeds["test"])
+    trans_sampler = RandEdgeSampler(
+        (train_df.u.values, val_df.u.values),
+        (train_df.i.values, val_df.i.values), num_total_unique_nodes, seed=seeds["transductive"])  # seen nodes only
+    induc_sampler = RandEdgeSampler(
+        (train_df.u.values, val_df.u.values, test_df.u.values),
+        (train_df.i.values, val_df.i.values, test_df.i.values), num_total_unique_nodes, seed=seeds["inductive"])  # allow all
 
-    def sample_neg(dst_sampler: RandEdgeSampler, size: int):
+    def sample_neg(pair_sampler: RandEdgeSampler, size: int):
+        # Return src,dst pairs for negatives
         if neg_method == "uniform":
-            # Only dst part is used downstream; src from sampler is discarded in eval
-            _, dst_fake = dst_sampler.sample(size)
-            return dst_fake
+            src_fake, dst_fake = pair_sampler.sample(size)
+            return src_fake, dst_fake
         elif neg_method == "semba":
-            # Use strict negative sampling that avoids existing edges, but not src-aligned
-            src_fake, dst_fake = dst_sampler.sample_semba(size)
-            return dst_fake
+            # Strict negative sampling can include nodes not present in partial graphs; for train/val, fall back to uniform
+            src_fake, dst_fake = pair_sampler.sample_semba(size)
+            return src_fake, dst_fake
         else:
             raise ValueError("Unknown neg_method")
 
+    # Get the maximum edge index from the entire dataset to ensure continuous indexing
+    max_edge_idx = g_df.idx.max()
+    current_neg_idx = max_edge_idx + 1
+
     def export_for_split(name: str, mask_key: str, sampler: RandEdgeSampler):
+        nonlocal current_neg_idx
+        
         pos_df = df_from_mask(g_df, masks[mask_key])
         if len(pos_df) == 0:
             # Still write an empty file for consistency
@@ -225,17 +240,18 @@ def export_negatives(g_df: pd.DataFrame, masks: Dict[str, np.ndarray], out_dir: 
             pd.DataFrame(columns=["u", "i", "ts", "label", "weight", "idx"]).to_csv(neg_path, index=False)
             return
 
-        # Build negatives per positive by sampling dst and pairing with original src
+        # Build negatives per positive by independently sampling src/dst pairs
         total_negs = len(pos_df) * max(1, int(neg_per_pos))
-        dst_fake = sample_neg(sampler, total_negs)
-        # Repeat each src/ts/weight/idx accordingly
-        src_rep = np.repeat(pos_df.u.values, neg_per_pos)
+        src_fake, dst_fake = sample_neg(sampler, total_negs)
+        # Align negative timestamps with the positive ones to match batching time cuts
         ts_rep = np.repeat(pos_df.ts.values, neg_per_pos)
-        idx_base = pos_df.idx.values.max() if len(pos_df) > 0 else 0
-        # Assign new idx for negatives following positives in that split
-        neg_idx = np.arange(idx_base + 1, idx_base + 1 + total_negs)
+        
+        # Assign continuous negative edge indices starting from max_edge_idx + 1
+        neg_idx = np.arange(current_neg_idx, current_neg_idx + total_negs)
+        current_neg_idx += total_negs  # Update for next split
+        
         neg_df = pd.DataFrame({
-            "u": src_rep,
+            "u": src_fake,
             "i": dst_fake,
             "ts": ts_rep,
             "label": np.zeros(total_negs, dtype=int),  # 0 denotes negative link; for link_sign treat as class 2 during usage
